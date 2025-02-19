@@ -1,51 +1,25 @@
-﻿
-using System.IO.MemoryMappedFiles;
-using SkiaSharp;
+﻿using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Drawing;
+using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
-int width = 800, height = 600;
+const int width = 800, height = 480;
 
-// Create a Skia canvas
-using (var bmp = new SKBitmap(width, height, SKColorType.Rgb565, SKAlphaType.Opaque))
-using (var canvas = new SKCanvas(bmp))
+using var image = new Image<Bgr565>(width, height);
+image.Mutate(ctx =>
 {
-    canvas.Clear(SKColors.Black);
-    using (var paint = new SKPaint { Color = SKColors.Red, StrokeWidth = 5 })
-    {
-        canvas.DrawLine(50, 50, 750, 550, paint); // Draw red line
-        canvas.DrawLine(100,100,400,600, paint);
-    }
+    ctx.Fill(Color.Aqua);
+    var circle = new EllipsePolygon(width / 2, height / 2, 200);
+    ctx.Draw(new SolidPen(Color.Red), circle);
+});
 
-    // Save raw pixel data to framebuffer
-    CopyToFramebuffer("/dev/fb0", bmp);
-}
+string file = args[0];
+var outFile = File.Open(file, FileMode.OpenOrCreate);
+var size = width * height * 2;
+Span<byte> buffer = new byte[size];
+
+image.CopyPixelDataTo(buffer);
+outFile.Write(buffer);
 
 Console.WriteLine("Framebuffer updated.");
-
-
-static void CopyToFramebuffer(string fbDevice, SKBitmap bmp)
-{
-int width = bmp.Width, height = bmp.Height;
-int bytesPerPixel = 2; // RGB565
-int screenSize = width * height * bytesPerPixel;
-
-using (var mmf = MemoryMappedFile.CreateFromFile(fbDevice, FileMode.Open, "fb", screenSize, MemoryMappedFileAccess.ReadWrite))
-using (var accessor = mmf.CreateViewAccessor(0, screenSize))
-{
-    int offset = 0;
-    for (int y = 0; y < height; y++)  // Top-down order
-    {
-        for (int x = 0; x < width; x++)
-        {
-            SKColor color = bmp.GetPixel(x, y);
-            ushort pixel = RGB565(color.Red, color.Green, color.Blue);
-            accessor.Write(offset, pixel);
-            offset += bytesPerPixel;
-        }
-    }
-}
-}
-
-static ushort RGB565(int r, int g, int b)
-{
-    return (ushort)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
-}
